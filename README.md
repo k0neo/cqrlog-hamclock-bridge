@@ -109,3 +109,19 @@ Afterward, it resumes from the saved ID following service restarts.
 ## Author
 
 K0NEO
+
+## HamClock source modifications
+
+The bridge requires HamClock to support the custom `dxcall`
+parameter in its `/set_newdx` HTTP endpoint.
+
+The `patches/` directory contains:
+
+- `0001-dx-callsign-marker.patch` — adds callsign handling and
+  rendering beside the green DX marker.
+- `0002-gpsd-tpv-parser-fix.patch` — fixes GPSD TPV parsing.
+  This patch is independent of the callsign enhancement.
+
+For the tested upstream source revision, patch application,
+compilation, installation, and verification instructions, see
+[Building HamClock with DX Callsign Support](docs/HAMCLOCK_BUILD.md).

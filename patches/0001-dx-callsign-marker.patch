@@ -1,0 +1,149 @@
+diff --git a/ESPHamClock/ESPHamClock.cpp b/ESPHamClock/ESPHamClock.cpp
+index c521c7b..028f566 100644
+--- a/ESPHamClock/ESPHamClock.cpp
++++ b/ESPHamClock/ESPHamClock.cpp
+@@ -846,9 +846,11 @@ void drawOneTimeDE()
+     de_c = de_c_save;
+ }
+ 
++static char dx_contact_call[24] = "";
++
+ static void drawDXMarker (bool force)
+ {
+-    // check for being off zoomed mercator map
++    // Check for being off zoomed Mercator map.
+     if (dx_c.s.x == 0)
+         return;
+ 
+@@ -856,9 +858,38 @@ static void drawDXMarker (bool force)
+         tft.fillCircle (dx_c.s.x, dx_c.s.y, DX_R, DX_COLOR);
+         tft.drawCircle (dx_c.s.x, dx_c.s.y, DX_R, RA8875_BLACK);
+         tft.fillCircle (dx_c.s.x, dx_c.s.y, 2, RA8875_BLACK);
++
++        // Experimental callsign label: map marker only.
++        if (!force) {
++            const char *label = dx_contact_call;
++            if (!*label)
++            return;
++
++            selectFontStyle (LIGHT_FONT, FAST_FONT);
++            tft.setTextColor (DX_COLOR);
++
++            int tw = getTextWidth (label);
++            int x = dx_c.s.x + DX_R + 6;
++            int y = dx_c.s.y + 5;
++
++            // Move left if the label crosses the right map edge.
++            if (x + tw >= map_b.x + map_b.w)
++                x = dx_c.s.x - DX_R - tw - 6;
++
++            // Keep the label inside the map.
++            if (x >= map_b.x &&
++                y >= map_b.y + 15 &&
++                x + tw < map_b.x + map_b.w &&
++                y < map_b.y + map_b.h - 15) {
++
++                tft.setCursor (x, y);
++                tft.print (label);
++            }
++        }
+     }
+ }
+ 
++
+ /* draw the one-time portion of dx_info either because we just booted or because
+  * we are transitioning back from being in sat mode
+  */
+@@ -1152,7 +1183,8 @@ static void checkTouch()
+  * use the given grid, else look up from ll.
+  * also set override prefix unless NULL
+  */
+-void newDX (LatLong &ll, const char grid[MAID_CHARLEN], const char *ovprefix)
++void newDX (LatLong &ll, const char grid[MAID_CHARLEN],
++            const char *ovprefix, const char *dxcall)
+ {
+     // require password if set
+     if (!askPasswd("newdx", true))
+@@ -1187,6 +1219,11 @@ void newDX (LatLong &ll, const char grid[MAID_CHARLEN], const char *ovprefix)
+     else
+         unsetDXPrefixOverride();
+ 
++    // Save the contacted callsign for the DX map marker.
++    // Ordinary DX changes without a callsign clear the label.
++    snprintf(dx_contact_call, sizeof(dx_contact_call),
++         "%s", dxcall ? dxcall : "");
++
+     // enable great path unless very close to DE
+     dxpath_time = ERAD_M * dx_ll.GSD(de_ll) > DEDX_MINPATH ? millis() : 0;
+     scheduleMapRedraw();
+diff --git a/ESPHamClock/HamClock.h b/ESPHamClock/HamClock.h
+index f7a6d71..cb0b729 100644
+--- a/ESPHamClock/HamClock.h
++++ b/ESPHamClock/HamClock.h
+@@ -920,7 +920,8 @@ extern bool overRSS (const SCoord &s);
+ extern bool overRSS (const SBox &b);
+ extern void setScreenLock (bool on);
+ extern void newDE (LatLong &ll, const char grid[MAID_CHARLEN]);
+-extern void newDX (LatLong &ll, const char grid[MAID_CHARLEN], const char *override_prefix);
++extern void newDX (LatLong &ll, const char grid[MAID_CHARLEN],
++                   const char *override_prefix, const char *dxcall = nullptr);
+ extern void drawDXPath(void);
+ extern bool screenIsLocked(void);
+ extern time_t getUptime (uint16_t *days, uint8_t *hrs, uint8_t *mins, uint8_t *secs);
+diff --git a/ESPHamClock/webserver.cpp b/ESPHamClock/webserver.cpp
+index 2522817..4f3b3fc 100644
+--- a/ESPHamClock/webserver.cpp
++++ b/ESPHamClock/webserver.cpp
+@@ -3131,6 +3131,7 @@ static bool setWiFiNewDEDX_helper (WiFiClient &client, bool new_dx, char line[],
+     wa.name[wa.nargs++] = "lng";
+     wa.name[wa.nargs++] = "grid";
+     wa.name[wa.nargs++] = "call";
++    wa.name[wa.nargs++] = "dxcall";
+ 
+     // parse
+     if (!parseWebCommand (wa, line, line_len))
+@@ -3141,6 +3142,17 @@ static bool setWiFiNewDEDX_helper (WiFiClient &client, bool new_dx, char line[],
+     const char *lng_spec = wa.value[1];
+     const char *grid_spec = wa.value[2];
+     const char *call = wa.value[3];
++    const char *dxcall = wa.found[4] ? wa.value[4] : NULL;
++
++    // Only permit short, conventional callsign characters.
++    if (dxcall &&
++    (strlen(dxcall) >= 24 ||
++     strspn(dxcall,
++           "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/-")
++       != strlen(dxcall))) {
++    strcpy(line, "invalid dxcall");
++    return false;
++}
+ 
+     // set automatic TZ
+     setTZAuto (new_dx ? dx_tz : de_tz);
+@@ -3152,7 +3164,7 @@ static bool setWiFiNewDEDX_helper (WiFiClient &client, bool new_dx, char line[],
+             return (false);
+         }
+         if (setCallsign (call)) {
+-            updateCallsign (true);
++        updateCallsign (true);
+         } else {
+             strcpy (line, "invalid call");
+             return (false);
+@@ -3181,7 +3193,7 @@ static bool setWiFiNewDEDX_helper (WiFiClient &client, bool new_dx, char line[],
+ 
+         // engage
+         if (new_dx)
+-            newDX (ll, NULL, NULL);
++            newDX (ll, NULL, NULL, dxcall);
+         else
+             newDE (ll, NULL);
+ 
+@@ -3200,7 +3212,7 @@ static bool setWiFiNewDEDX_helper (WiFiClient &client, bool new_dx, char line[],
+ 
+         // engage
+         if (new_dx)
+-            newDX (ll, grid_spec, NULL);
++            newDX (ll, grid_spec, NULL, dxcall);
+         else
+             newDE (ll, grid_spec);
+     }

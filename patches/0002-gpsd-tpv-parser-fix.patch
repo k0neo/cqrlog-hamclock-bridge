@@ -1,0 +1,20 @@
+diff --git a/ESPHamClock/gpsd.cpp b/ESPHamClock/gpsd.cpp
+index aa052e9..e7b0c02 100644
+--- a/ESPHamClock/gpsd.cpp
++++ b/ESPHamClock/gpsd.cpp
+@@ -157,14 +157,10 @@ static bool getGPSDSomething(bool (*lookf)(const char *buf, void *arg), void *ar
+ 
+                 // add to line, crack when full or see nl
+                 if (ll == MAXGLL-1 || line[ll] == '\n') {
+-                    char line_covered = line[ll];
+                     line[ll] = '\0';
+                     look_ok = (*lookf)(line, arg);
+                     if (!look_ok) {
+-                        // retain tail of previous in case keyword got split
+-                        line[ll] = line_covered;
+-                        ll = 100;
+-                        memmove (line, line+(MAXGLL-ll), ll);
++                       ll = 0;
+                     }
+                 } else
+                     ll++;

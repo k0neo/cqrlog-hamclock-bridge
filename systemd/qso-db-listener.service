@@ -1,0 +1,11 @@
+[Unit]
+Description=CQRLOG MariaDB to HamClock DX Bridge
+
+[Service]
+Type=simple
+ExecStart=%h/bin/qso-db-listener.pl
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

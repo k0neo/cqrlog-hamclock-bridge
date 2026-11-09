@@ -1,0 +1,22 @@
+# Perl temporary files
+*.bak
+*.swp
+*~
+*.tmp
+
+# Runtime state and logs
+last-id
+*.log
+
+# Database files and credentials
+*.cnf
+*.cfg
+*.sql
+*.sqlite
+*.db
+*.pem
+*.key
+
+# Build artifacts
+*.o
+*.so

@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use DBI;
 use HTTP::Tiny;
+use IO::Socket::INET;
 use File::Path qw(make_path);
 
 $| = 1;
@@ -13,6 +14,48 @@ my $hamclock = $ENV{HAMCLOCK_URL} // 'http://127.0.0.1:8080';
 my $poll_interval = $ENV{POLL_INTERVAL} // 2;
 my $database = $ENV{CQRLOG_DATABASE} // 'cqrlog001';
 my $db_user = $ENV{CQRLOG_DB_USER} // 'root';
+
+# Optional local QSO visualization endpoint.
+my $globe_host = '127.0.0.1';
+my $globe_port = $ENV{QSO_GLOBE_PORT} // 45832;
+my $globe_enabled = $ENV{QSO_GLOBE_ENABLED} // 0;
+
+my $globe_socket;
+
+sub notify_globe {
+    my ($id, $call, $grid) = @_;
+
+    return unless $globe_enabled;
+
+    eval {
+        unless ($globe_socket) {
+            $globe_socket = IO::Socket::INET->new(
+                PeerAddr => $globe_host,
+                PeerPort => $globe_port,
+                Proto    => 'udp',
+                Blocking => 0,
+            ) or die "UDP socket: $!";
+        }
+
+        my $message = join(
+            "\t", 'QSO1', $id, $call, $grid
+        );
+
+        my $sent = $globe_socket->send($message);
+
+        die "UDP send: $!"
+            unless defined $sent
+                && $sent == length($message);
+
+        print "QSO $id: globe notification sent\n";
+    };
+
+    if ($@) {
+        print "Globe notification failed: $@\n";
+        undef $globe_socket;
+    }
+}
+
 
 my $state_dir = "$ENV{HOME}/.local/state/qso-db-listener";
 my $state_file = "$state_dir/last-id";
@@ -131,6 +174,8 @@ while (1) {
         $last_id = $id;
 
         print "QSO $id: $call ($grid) -> HamClock updated\n";
+
+        notify_globe($id, $call, $grid);
     }
 
     $sth->finish;

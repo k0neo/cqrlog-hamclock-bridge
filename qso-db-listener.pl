@@ -11,6 +11,7 @@ $| = 1;
 
 my $socket = $ENV{CQRLOG_SOCKET} // "$ENV{HOME}/.config/cqrlog/database/sock";
 my $hamclock = $ENV{HAMCLOCK_URL} // 'http://127.0.0.1:8080';
+my $hamclock_enabled = $ENV{HAMCLOCK_ENABLED} // 1;
 my $poll_interval = $ENV{POLL_INTERVAL} // 2;
 my $database = $ENV{CQRLOG_DATABASE} // 'cqrlog001';
 my $db_user = $ENV{CQRLOG_DB_USER} // 'root';
@@ -92,7 +93,15 @@ my $dbh = DBI->connect(
     }
 ) or die "Database connection failed: $DBI::errstr\n";
 
-my $http = HTTP::Tiny->new(timeout => 5);
+my $http = $hamclock_enabled
+    ? HTTP::Tiny->new(timeout => 5)
+    : undef;
+
+print "HamClock notifications: ",
+    ($hamclock_enabled ? "enabled" : "disabled"), "\n";
+
+print "QSO Globe notifications: ",
+    ($globe_enabled ? "enabled" : "disabled"), "\n";
 
 my $last_id;
 
@@ -158,22 +167,29 @@ while (1) {
             next;
         }
 
-        my $encoded_call = $call;
-        $encoded_call =~ s{/}{%2F}g;
+        if ($hamclock_enabled) {
+            my $encoded_call = $call;
+            $encoded_call =~ s{/}{%2F}g;
 
-        my $url =
-            "$hamclock/set_newdx?grid=$grid&dxcall=$encoded_call";
+            my $url =
+                "$hamclock/set_newdx?grid=$grid&dxcall=$encoded_call";
 
-        my $response = $http->get($url);
+            my $response = $http->get($url);
 
-        die "HamClock update failed for QSO $id: "
-            . "$response->{status} $response->{reason}\n"
-            unless $response->{success};
+            die "HamClock update failed for QSO $id: "
+                . "$response->{status} $response->{reason}\n"
+                unless $response->{success};
+        }
 
         save_state($id);
         $last_id = $id;
 
-        print "QSO $id: $call ($grid) -> HamClock updated\n";
+        if ($hamclock_enabled) {
+            print "QSO $id: $call ($grid) -> HamClock updated\n";
+        }
+        else {
+            print "QSO $id: $call ($grid) -> local processing\n";
+        }
 
         notify_globe($id, $call, $grid);
     }

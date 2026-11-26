@@ -125,3 +125,53 @@ The `patches/` directory contains:
 For the tested upstream source revision, patch application,
 compilation, installation, and verification instructions, see
 [Building HamClock with DX Callsign Support](docs/HAMCLOCK_BUILD.md).
+
+## Standalone QSO Globe operation
+
+The listener supports portable operation without HamClock.
+
+| Environment variable | Default |
+|---|---|
+| HAMCLOCK_ENABLED | 1 |
+| QSO_GLOBE_ENABLED | 0 |
+| QSO_GLOBE_PORT | 45832 |
+
+Setting HAMCLOCK_ENABLED=0 disables HTTP initialization
+and HamClock notifications while preserving database
+monitoring, persistent state, and UDP notifications.
+
+The default behavior remains backward compatible.
+
+### System MariaDB configuration
+
+Example systemd user service override:
+
+    [Service]
+    Environment=CQRLOG_SOCKET=/run/mysqld/mysqld.sock
+    Environment=CQRLOG_DATABASE=cqrlog001
+    Environment=CQRLOG_DB_USER=rbrown
+    Environment=HAMCLOCK_ENABLED=0
+    Environment=QSO_GLOBE_ENABLED=1
+    Environment=QSO_GLOBE_PORT=45832
+    Environment=POLL_INTERVAL=2
+
+The database account must match the local installation.
+
+UNIX socket authentication permits passwordless operation.
+The listener requires SELECT privileges only on the
+id_cqrlog_main, callsign, and loc columns of cqrlog_main.
+
+### Verified deployment
+
+Orion, Linux Mint 22.3, MariaDB 10.11.14,
+QSO Globe 1.0.0.
+
+Passwordless authentication, database query compatibility,
+foreground execution, state persistence, and permanent
+systemd user service startup have been verified.
+
+Live contact processing is deferred until field operation.
+HamClock-enabled runtime regression remains pending.
+
+QSO Globe:
+https://github.com/k0neo/qso-globe
